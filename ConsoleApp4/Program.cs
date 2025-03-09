@@ -27,9 +27,9 @@ var consumers = Enumerable.Range(0, 3).Select(i => Task.Run(async () =>
 {
    await foreach (var item in channel.Reader.ReadAllAsync())
    {
-       ConsoleEx.WriteLine($"Processing {item.Name} (Consumer {i})");
+       ConsoleEx.WriteLine($"   Processing {item.Name} (Consumer {i})");
        await Task.Delay(20000); // Simulate processing
-       ConsoleEx.WriteLine($"Processed {item.Name} (Consumer {i})");
+       ConsoleEx.WriteLine($"   Processed {item.Name} (Consumer {i})");
    }
 })).ToList();
 
