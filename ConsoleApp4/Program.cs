@@ -1,19 +1,15 @@
 ﻿using ConsoleApp4;
 using System.Threading.Channels;
-using static Confluent.Kafka.ConfigPropertyNames;
 
 
 var store = new ItemStore();
 
 
-var channelA = Channel.CreateUnbounded<ItemsResponse>();
-var channelB = Channel.CreateUnbounded<ItemsResponse>();
-
-var pipelineA = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
+var pipelineA = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId, output) =>
 {
     ConsoleEx.WriteLine($"[A] Fetching page {pageNumber}");
     var items = await store.GetItems(pageNumber * 25, 25);
-    await channelA.Writer.WriteAsync(items);
+    await output.Writer.WriteAsync(items);
     ConsoleEx.WriteLine($"""
         [A] Fetched page {pageNumber}
             {string.Join(',', items.Items.Select(x => x.Name))}
@@ -22,9 +18,10 @@ var pipelineA = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
     return items.HasMore;
 });
 
-var pipelineB = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
+//var pipelineB = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId, _, output) =>
+var pipelineB = pipelineA.Concat<ItemsResponse>(async (pageNumber, consumerId, input, output) =>
 {
-    await foreach (var page in channelA.Reader.ReadAllAsync())
+    await foreach (var page in input.Reader.ReadAllAsync())
     {
         ConsoleEx.WriteLine($"[B] Reversing {page.PageStart} to {page.PageEnd} (Consumer {consumerId})");
         await Task.Delay(5000); // Simulate processing
@@ -38,7 +35,7 @@ var pipelineB = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
                 Name = new string(x.Name.Reverse().ToArray()),
             }).ToArray(),
         };
-        await channelB.Writer.WriteAsync(reversed);
+        await output.Writer.WriteAsync(reversed);
         ConsoleEx.WriteLine($"""
             [B] Reversed {reversed.PageStart} to {reversed.PageEnd} (Consumer {consumerId})
                 {string.Join(',', reversed.Items.Select(x => x.Name))}
@@ -48,9 +45,10 @@ var pipelineB = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
     return false;
 }, 3);
 
-var pipelineC = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
+//var pipelineC = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId, _, output) =>
+var pipelineC = pipelineB.Concat<ItemsResponse>(async (pageNumber, consumerId, input, output) =>
 {
-    await foreach (var page in channelB.Reader.ReadAllAsync())
+    await foreach (var page in input.Reader.ReadAllAsync())
     {
         ConsoleEx.WriteLine($"[C] Capsing {page.PageStart} to {page.PageEnd} (Consumer {consumerId})");
         await Task.Delay(6000); // Simulate processing
@@ -74,8 +72,7 @@ var pipelineC = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId) =>
 }, 3);
 
 
+// Make awaiter await inner-pipeline, so that we only have one call instead of 3 here
 await pipelineA;
-channelA.Writer.Complete(); // Signal consumers that no more items will be added
 await pipelineB;
-channelB.Writer.Complete(); // Signal consumers that no more items will be added
 await pipelineC;
