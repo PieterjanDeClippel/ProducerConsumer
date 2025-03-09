@@ -23,7 +23,7 @@ public class Pipeline<Tout>
         return result;
     }
 
-    protected Pipeline(Task[] tasks)
+    protected Pipeline(Func<int, int, Channel<Tout>, Task<bool>> action, int consumerCount)
     {
         //this.tasks = tasks;
         this.tasks = Enumerable.Range(0, consumerCount)
@@ -33,7 +33,7 @@ public class Pipeline<Tout>
                 var i = 0;
                 do
                 {
-                    hasMore = await action(i, consumerId, input, output);
+                    hasMore = await action(i, consumerId, output);
                     i++;
                 }
                 while (hasMore);
@@ -53,7 +53,7 @@ public class Pipeline<Tout>
 
 public class Pipeline<Tin, Tout> : Pipeline<Tout>
 {
-    public Pipeline(Task[] tasks) : base(tasks) { }
+    public Pipeline(Func<int, int, Channel<Tin>?, Channel<Tout>, Task<bool>> action, int consumerCount) : base((pageNumber, consumerId, output) => action(pageNumber, consumerId, null, output), consumerCount) { }
 
     //public static Pipeline<TOUT> Create<TOUT>(Func<int, int, Channel<Tin>?, Channel<Tout>, Task<bool>> action, int consumerCount = 1)
     //{
@@ -76,7 +76,7 @@ public class Pipeline<Tin, Tout> : Pipeline<Tout>
         //            while (hasMore);
         //        }))
         //        .ToArray());
-        var result = new Pipeline<Tin, Tout>();
+        var result = new Pipeline<Tin, Tout>(action, consumerCount);
         return result;
     }
 
