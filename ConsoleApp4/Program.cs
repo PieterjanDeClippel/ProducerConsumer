@@ -18,7 +18,6 @@ var pipelineA = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId, ou
     return items.HasMore;
 });
 
-//var pipelineB = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId, _, output) =>
 var pipelineB = pipelineA.Concat<ItemsResponse>(async (pageNumber, consumerId, input, output) =>
 {
     await foreach (var page in input.Reader.ReadAllAsync())
@@ -45,7 +44,6 @@ var pipelineB = pipelineA.Concat<ItemsResponse>(async (pageNumber, consumerId, i
     return false;
 }, 3);
 
-//var pipelineC = Pipeline<ItemsResponse>.Create(async (pageNumber, consumerId, _, output) =>
 var pipelineC = pipelineB.Concat<ItemsResponse>(async (pageNumber, consumerId, input, output) =>
 {
     await foreach (var page in input.Reader.ReadAllAsync())
