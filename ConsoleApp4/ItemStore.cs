@@ -6,7 +6,7 @@ public class ItemStore
 
     public async Task<ItemsResponse> GetItems(int offset, int count)
     {
-        await Task.Delay(5000);
+        await Task.Delay(2000);
         return new ItemsResponse
         {
             Items = items.Skip(offset).Take(count).ToArray(),

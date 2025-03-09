@@ -18,12 +18,12 @@ var producerA = Enumerable.Range(0, 1)
             ConsoleEx.WriteLine($"[A] Fetching page {i}");
             var items = await store.GetItems(i * 25, 25);
             await channelA.Writer.WriteAsync(items);
-            hasMore = items.HasMore;
             ConsoleEx.WriteLine($"""
                 [A] Fetched page {i}
                     {string.Join(',', items.Items.Select(x => x.Name))}
                 """);
             
+            hasMore = items.HasMore;
             i++;
         }
         while (hasMore);
@@ -32,26 +32,35 @@ var producerA = Enumerable.Range(0, 1)
 var consumersA = Enumerable.Range(0, 3)
     .Select(consumerId => Task.Run(async () =>
     {
-        await foreach (var page in channelA.Reader.ReadAllAsync())
+        var hasMore = true;
+        var i = 0;
+        do
         {
-            ConsoleEx.WriteLine($"[B] Reversing {page.PageStart} to {page.PageEnd} (Consumer {consumerId})");
-            await Task.Delay(10000); // Simulate processing
-            var reversed = new ItemsResponse
+            await foreach (var page in channelA.Reader.ReadAllAsync())
             {
-                PageStart = page.PageStart,
-                HasMore = page.HasMore,
-                Items = page.Items.Select(x => new Item
+                ConsoleEx.WriteLine($"[B] Reversing {page.PageStart} to {page.PageEnd} (Consumer {consumerId})");
+                await Task.Delay(5000); // Simulate processing
+                var reversed = new ItemsResponse
                 {
-                    Id = x.Id,
-                    Name = new string(x.Name.Reverse().ToArray()),
-                }).ToArray(),
-            };
-            await channelB.Writer.WriteAsync(reversed);
-            ConsoleEx.WriteLine($"""
-                [B] Reversed {reversed.PageStart} to {reversed.PageEnd} (Consumer {consumerId})
-                    {string.Join(',', reversed.Items.Select(x => x.Name))}
-                """);
+                    PageStart = page.PageStart,
+                    HasMore = page.HasMore,
+                    Items = page.Items.Select(x => new Item
+                    {
+                        Id = x.Id,
+                        Name = new string(x.Name.Reverse().ToArray()),
+                    }).ToArray(),
+                };
+                await channelB.Writer.WriteAsync(reversed);
+                ConsoleEx.WriteLine($"""
+                    [B] Reversed {reversed.PageStart} to {reversed.PageEnd} (Consumer {consumerId})
+                        {string.Join(',', reversed.Items.Select(x => x.Name))}
+                    """);
+            }
+
+            hasMore = false;
+            i++;
         }
+        while (hasMore);
     }))
     .ToList();
 
@@ -59,25 +68,34 @@ var consumersA = Enumerable.Range(0, 3)
 var consumersB = Enumerable.Range(0, 3)
     .Select(consumerId => Task.Run(async () =>
     {
-        await foreach (var page in channelB.Reader.ReadAllAsync())
+        var hasMore = true;
+        var i = 0;
+        do
         {
-            ConsoleEx.WriteLine($"[C] Capsing {page.PageStart} to {page.PageEnd} (Consumer {consumerId})");
-            await Task.Delay(6000); // Simulate processing
-            var capsed = new ItemsResponse
+            await foreach (var page in channelB.Reader.ReadAllAsync())
             {
-                PageStart = page.PageStart,
-                HasMore = page.HasMore,
-                Items = page.Items.Select(x => new Item
+                ConsoleEx.WriteLine($"[C] Capsing {page.PageStart} to {page.PageEnd} (Consumer {consumerId})");
+                await Task.Delay(6000); // Simulate processing
+                var capsed = new ItemsResponse
                 {
-                    Id = x.Id,
-                    Name = new string(x.Name.ToUpper()),
-                }).ToArray(),
-            };
-            ConsoleEx.WriteLine($"""
-                [C] Capsed {capsed.PageStart} to {capsed.PageEnd} (Consumer {consumerId})
-                    {string.Join(',', capsed.Items.Select(x => x.Name))}
-                """);
+                    PageStart = page.PageStart,
+                    HasMore = page.HasMore,
+                    Items = page.Items.Select(x => new Item
+                    {
+                        Id = x.Id,
+                        Name = new string(x.Name.ToUpper()),
+                    }).ToArray(),
+                };
+                ConsoleEx.WriteLine($"""
+                    [C] Capsed {capsed.PageStart} to {capsed.PageEnd} (Consumer {consumerId})
+                        {string.Join(',', capsed.Items.Select(x => x.Name))}
+                    """);
+            }
+
+            hasMore = false;
+            i++;
         }
+        while (hasMore);
     }))
     .ToList();
 
