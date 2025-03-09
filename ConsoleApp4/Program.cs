@@ -2,39 +2,87 @@
 using System.Threading.Channels;
 
 
+var store = new ItemStore();
 
 
+var channelA = Channel.CreateUnbounded<ItemsResponse>();
+var channelB = Channel.CreateUnbounded<ItemsResponse>();
 
-var channel = Channel.CreateUnbounded<Item>();
-
-var producer = Task.Run(async () =>
+var producerA = Task.Run(async () =>
 {
-    for (int i = 1; i <= 20; i++)
+    var hasMore = true;
+    var i = 0;
+    do
     {
-        ConsoleEx.WriteLine($"Producing {i}");
-        // Send number to channel
-        await channel.Writer.WriteAsync(new Item
-        {
-            Id = i,
-            Name = $"Item {i}",
-        });
-        await Task.Delay(5000); // Simulate work
-        ConsoleEx.WriteLine($"Produced {i}");
+        ConsoleEx.WriteLine($"[A] Fetching page {i}");
+        var items = await store.GetItems(i * 25, 25);
+        await channelA.Writer.WriteAsync(items);
+        hasMore = items.HasMore;
+        ConsoleEx.WriteLine($"""
+            [A] Fetched page {i}
+                {string.Join(',', items.Items.Select(x => x.Name))}
+            """);
+            
+        i++;
     }
+    while (hasMore);
 });
 
-var consumers = Enumerable.Range(0, 3)
+var consumersA = Enumerable.Range(0, 3)
     .Select(i => Task.Run(async () =>
     {
-       await foreach (var item in channel.Reader.ReadAllAsync())
-       {
-           ConsoleEx.WriteLine($"   Processing {item.Name} (Consumer {i})");
-           await Task.Delay(20000); // Simulate processing
-           ConsoleEx.WriteLine($"   Processed {item.Name} (Consumer {i})");
-       }
+        await foreach (var page in channelA.Reader.ReadAllAsync())
+        {
+            ConsoleEx.WriteLine($"[B] Reversing {page.PageStart} to {page.PageEnd} (Consumer {i})");
+            await Task.Delay(10000); // Simulate processing
+            var reversed = new ItemsResponse
+            {
+                PageStart = page.PageStart,
+                HasMore = page.HasMore,
+                Items = page.Items.Select(x => new Item
+                {
+                    Id = x.Id,
+                    Name = new string(x.Name.Reverse().ToArray()),
+                }).ToArray(),
+            };
+            await channelB.Writer.WriteAsync(reversed);
+            ConsoleEx.WriteLine($"""
+                [B] Reversed {reversed.PageStart} to {reversed.PageEnd} (Consumer {i})
+                    {string.Join(',', reversed.Items.Select(x => x.Name))}
+                """);
+        }
     }))
     .ToList();
 
-await producer;
-channel.Writer.Complete(); // Signal consumers that no more items will be added
-await Task.WhenAll(consumers);
+
+var consumersB = Enumerable.Range(0, 3)
+    .Select(i => Task.Run(async () =>
+    {
+        await foreach (var page in channelB.Reader.ReadAllAsync())
+        {
+            ConsoleEx.WriteLine($"[C] Capsing {page.PageStart} to {page.PageEnd} (Consumer {i})");
+            await Task.Delay(6000); // Simulate processing
+            var capsed = new ItemsResponse
+            {
+                PageStart = page.PageStart,
+                HasMore = page.HasMore,
+                Items = page.Items.Select(x => new Item
+                {
+                    Id = x.Id,
+                    Name = new string(x.Name.ToUpper()),
+                }).ToArray(),
+            };
+            ConsoleEx.WriteLine($"""
+                [C] Capsed {capsed.PageStart} to {capsed.PageEnd} (Consumer {i})
+                    {string.Join(',', capsed.Items.Select(x => x.Name))}
+                """);
+        }
+    }))
+    .ToList();
+
+
+await producerA;
+channelA.Writer.Complete(); // Signal consumers that no more items will be added
+await Task.WhenAll(consumersA);
+channelB.Writer.Complete(); // Signal consumers that no more items will be added
+await Task.WhenAll(consumersB);

@@ -2,12 +2,17 @@
 
 public class ItemStore
 {
-    private readonly Item[] items = Enumerable.Range(0, 5000).Select(i => new Item { Id = i, Name = $"Item {i}" }).ToArray();
+    private readonly Item[] items = Enumerable.Range(0, 500).Select(i => new Item { Id = i, Name = $"Item {i}" }).ToArray();
 
-    public async Task<Item[]> GetItems(int offset, int count)
+    public async Task<ItemsResponse> GetItems(int offset, int count)
     {
-        await Task.Delay(10000);
-        return items.Skip(offset).Take(count).ToArray();
+        await Task.Delay(5000);
+        return new ItemsResponse
+        {
+            Items = items.Skip(offset).Take(count).ToArray(),
+            PageStart = offset,
+            HasMore = (offset + count < items.Length),
+        };
     }
 }
 
@@ -15,4 +20,12 @@ public class Item
 {
     public int Id { get; set; }
     public string Name { get; set; }
+}
+
+public class ItemsResponse
+{
+    public Item[] Items { get; set; }
+    public int PageStart { get; set; }
+    public bool HasMore { get; set; }
+    public int PageEnd => PageStart + Items.Length - 1;
 }
