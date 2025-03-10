@@ -94,6 +94,8 @@ public class Pipeline<Tin, Tout> : Pipeline
 
     public TaskAwaiter GetAwaiter()
     {
-        return Task.WhenAll(tasks).GetAwaiter();
+        return Task.WhenAll(tasks)
+            .ContinueWith(_ => Dispose())
+            .GetAwaiter();
     }
 }
